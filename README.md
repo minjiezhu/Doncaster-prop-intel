@@ -1,5 +1,7 @@
 # doncaster-property-intel
 
+> [中文文档](README.zh.md)
+
 A RAG-powered property research assistant focused on Manningham, VIC.
 
 Primary suburb: Doncaster (3108)
