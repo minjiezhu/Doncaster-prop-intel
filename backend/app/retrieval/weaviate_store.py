@@ -13,6 +13,10 @@ class WeaviateStore:
         self.class_name = self.settings.weaviate_class_name
         self.timeout = self.settings.retrieval_timeout_seconds
 
+    # ------------------------------------------------------------------
+    # Schema management
+    # ------------------------------------------------------------------
+
     def ensure_schema(self) -> None:
         with httpx.Client(timeout=self.timeout) as client:
             check = client.get(f"{self.base_url}/v1/schema/{self.class_name}")
@@ -33,6 +37,10 @@ class WeaviateStore:
             }
             create = client.post(f"{self.base_url}/v1/schema", json=schema)
             create.raise_for_status()
+
+    # ------------------------------------------------------------------
+    # Ingestion
+    # ------------------------------------------------------------------
 
     def upsert_chunks(self, chunks: Iterable[dict]) -> int:
         self.ensure_schema()
@@ -57,25 +65,61 @@ class WeaviateStore:
                 inserted += 1
         return inserted
 
+    # ------------------------------------------------------------------
+    # Retrieval helpers
+    # ------------------------------------------------------------------
+
+    _RETURN_FIELDS = "{ text source suburb doc_type strategy chunk_index _additional { distance id } }"
+
     def vector_search(self, vector: list[float], top_k: int = 5) -> list[dict]:
+        """Pure vector (cosine) recall — Phase 1 baseline."""
         self.ensure_schema()
         vector_str = ", ".join(f"{v:.8f}" for v in vector)
-        query = {
-            "query": (
-                "{"
-                f"Get{{{self.class_name}("
-                f"nearVector: {{vector: [{vector_str}]}} "
-                f"limit: {top_k}"
-                ")"
-                "{ text source suburb doc_type strategy chunk_index _additional { distance id } }"
-                "}}"
-            )
-        }
+        gql = (
+            "{"
+            f"Get{{{self.class_name}("
+            f"nearVector: {{vector: [{vector_str}]}} "
+            f"limit: {top_k}"
+            ")"
+            f"{self._RETURN_FIELDS}"
+            "}}"
+        )
+        return self._run_graphql(gql)
 
+    def hybrid_search(self, query: str, vector: list[float], top_k: int = 10, alpha: float = 0.5) -> list[dict]:
+        """Hybrid BM25 + vector recall.
+
+        Architecture note:
+          alpha=0   → pure BM25 keyword recall
+          alpha=1   → pure vector semantic recall
+          alpha=0.5 → equal weight (default; tunable via HYBRID_ALPHA in .env)
+
+        Why hybrid over pure vector?
+          Property queries often contain specific terms (suburb names, price ranges,
+          postcode numbers) that benefit from exact-match BM25 recall.  Pure vector
+          search may miss these if the embedding space does not separate them cleanly.
+          Hybrid fuses both signals, improving coverage without sacrificing semantic
+          relevance.
+        """
+        self.ensure_schema()
+        vector_str = ", ".join(f"{v:.8f}" for v in vector)
+        # Escape double-quotes inside query string to avoid breaking GraphQL
+        safe_query = query.replace('"', '\\"')
+        gql = (
+            "{"
+            f"Get{{{self.class_name}("
+            f'hybrid: {{query: "{safe_query}", vector: [{vector_str}], alpha: {alpha}}} '
+            f"limit: {top_k}"
+            ")"
+            f"{self._RETURN_FIELDS}"
+            "}}"
+        )
+        return self._run_graphql(gql)
+
+    def _run_graphql(self, query: str) -> list[dict]:
         with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(f"{self.base_url}/v1/graphql", json=query)
+            resp = client.post(f"{self.base_url}/v1/graphql", json={"query": query})
             resp.raise_for_status()
             data = resp.json()
+        return data.get("data", {}).get("Get", {}).get(self.class_name, [])
 
-        rows = data.get("data", {}).get("Get", {}).get(self.class_name, [])
-        return rows

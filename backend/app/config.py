@@ -25,7 +25,21 @@ class Settings(BaseSettings):
     retrieval_top_k: int = Field(default=5)
     retrieval_timeout_seconds: float = Field(default=30.0)
 
+    # Hybrid search: alpha=0 → pure BM25, alpha=1 → pure vector, 0.5 → balanced.
+    # We default to 0.5 so keyword recall and semantic recall contribute equally.
+    hybrid_alpha: float = Field(default=0.5)
+    # Fetch more candidates before reranking so the reranker has a richer pool to choose from.
+    hybrid_candidate_multiplier: int = Field(default=3)
+
+    # Reranker: local cross-encoder model (runs on CPU, no external API key required).
+    # Swap to a Cohere model name and set reranker_provider=cohere to use Cohere free tier.
+    reranker_provider: str = Field(default="local")   # "local" | "cohere"
+    reranker_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")
+    reranker_top_n: int = Field(default=5)
+    cohere_api_key: str = Field(default="")
+
     metrics_log_path: str = Field(default="backend/logs/chunk_quality.jsonl")
+    retrieval_comparison_log_path: str = Field(default="backend/logs/retrieval_comparison.jsonl")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

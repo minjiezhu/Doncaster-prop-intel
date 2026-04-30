@@ -25,6 +25,14 @@ Extended coverage: Doncaster East (3109), Templestowe and Templestowe Lower (310
 - Structured quality logging for chunking comparison
 - Query endpoint: GET /query for vector retrieval + LangChain + Ollama answer generation
 
+## Phase 2 Deliverables
+
+- Hybrid search: Weaviate BM25 + vector with configurable alpha weighting
+- Local cross-encoder reranker (sentence-transformers, CPU-friendly) with optional Cohere API swap
+- Three search modes via `?mode=` param: `vector`, `hybrid`, `hybrid_rerank`
+- Retrieval failure handling: Weaviate unreachable, Ollama timeout, empty recall
+- Structured comparison log (retrieval_comparison.jsonl) for side-by-side mode analysis
+
 ## Project Structure
 
 doncaster-property-intel/
@@ -59,10 +67,20 @@ doncaster-property-intel/
 - It simplifies validation of ingestion quality before introducing hybrid BM25 weighting.
 - Phase 2 will extend this baseline with hybrid search and reranking for higher precision.
 
-### Reranker placement in later phases
+### Why hybrid over pure vector?
 
-- Retrieval flow will evolve to: recall (vector or hybrid) -> rerank -> answer generation.
-- Keeping reranker after recall avoids over-constraining candidate set too early.
+- Property queries often contain specific terms (suburb names, postcodes, price thresholds) that benefit
+  from exact keyword (BM25) recall.
+- Pure vector search may miss these if the embedding space does not cleanly separate them.
+- Hybrid fuses both signals; `alpha` is configurable so the balance can be tuned per query type.
+
+### Reranker placement
+
+- Retrieval flow: recall (vector or hybrid) → rerank → prompt assembly → answer generation.
+- Recall casts a wide net (`top_k × HYBRID_CANDIDATE_MULTIPLIER`); the reranker then narrows to `RERANKER_TOP_N`.
+- Keeping reranker after recall avoids over-constraining the candidate pool too early.
+- Local cross-encoder (`ms-marco-MiniLM-L-6-v2`) runs on CPU with no external dependency; swap to
+  Cohere by setting `RERANKER_PROVIDER=cohere` and `COHERE_API_KEY` in `.env`.
 
 ## Setup
 
@@ -107,10 +125,18 @@ Quality logs are written to the path in METRICS_LOG_PATH (default backend/logs/c
 
 ## Query Endpoint
 
+The `mode` parameter selects the retrieval pipeline:
+
+| mode | behaviour |
+|------|-----------|
+| `vector` | Phase 1 baseline — pure cosine vector recall |
+| `hybrid` | BM25 + vector recall (Weaviate native hybrid) |
+| `hybrid_rerank` | hybrid recall + cross-encoder reranking (default) |
+
 Example request:
 
 ```bash
-curl "http://localhost:8000/query?question=What%20are%20school%20zones%20in%203108%3F&top_k=5"
+curl "http://localhost:8000/query?question=What%20are%20school%20zones%20in%203108%3F&top_k=5&mode=hybrid_rerank"
 ```
 
 Example response shape:
@@ -124,14 +150,20 @@ Example response shape:
 			"source": "school-zones.pdf",
 			"suburb": "doncaster",
 			"strategy": "semantic",
-			"distance": 0.12,
-			"chunk_index": 3
+			"rerank_score": 8.43,
+			"chunk_index": 3,
+			"mode": "hybrid_rerank"
 		}
 	],
 	"retrieval_debug": {
+		"mode": "hybrid_rerank",
 		"top_k": 5,
-		"retrieval_time_ms": 143,
-		"hits": 5
+		"candidates_before_rerank": 15,
+		"final_hits": 5,
+		"retrieval_time_ms": 120,
+		"rerank_time_ms": 38,
+		"total_time_ms": 310,
+		"fallback_triggered": false
 	}
 }
 ```
@@ -142,3 +174,19 @@ Example response shape:
 - At least one PDF or CSV can be ingested into Weaviate
 - chunk_quality.jsonl contains both fixed and semantic comparison entries
 - GET /query returns an answer and source chunks
+
+## Phase 2 Done Criteria
+
+- `?mode=hybrid` returns results with BM25 + vector fusion
+- `?mode=hybrid_rerank` returns results reordered by cross-encoder score
+- retrieval_comparison.jsonl captures entries for all three modes
+- Weaviate unreachable and Ollama timeout both return graceful responses
+- All Phase 2 tests pass
+
+## Roadmap
+
+| Phase | Goal | Status |
+|-------|------|--------|
+| 1 | Basic RAG pipeline (ingestion + vector search + Q&A) | Done |
+| 2 | Retrieval quality (hybrid search, reranking, failure handling) | Done |
+| 3 | Agentic workflow (multi-tool agent, Domain API, structured logging) | Pending |
