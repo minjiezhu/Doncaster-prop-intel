@@ -41,6 +41,17 @@
 
 ---
 
+## Phase 3 交付内容
+
+- LangChain ReAct Agent，根据查询自主选择工具，无硬编码路由逻辑
+- **工具 1 — `rag_search`**：本地知识库（PDF、CSV、报告），使用 hybrid_rerank 管线
+- **工具 2 — `domain_listings`**：Domain.com.au 房产挂牌（无 API Key 使用 stub 模式；配置后调用真实 API）
+- **工具 3 — `web_search`**：DuckDuckGo 兜底，覆盖最新新闻、议会公告、规划许可
+- 结构化 Agent 调用日志（`agent_calls.jsonl`）：工具选择、各工具延迟、兜底标记
+- 新增端点：`POST /agent` — 接收自由文本问题，返回答案 + 工具遥测数据
+
+---
+
 ## 项目结构
 
 ```
@@ -50,7 +61,7 @@ doncaster-property-intel/
 │   │   ├── api/          # FastAPI 路由
 │   │   ├── ingestion/    # 文档摄入管线
 │   │   ├── retrieval/    # 向量检索与问答链
-│   │   ├── agent/        # Phase 3 Agent 占位
+│   │   ├── agent/        # Phase 3 ReAct Agent + 工具
 │   │   └── config.py     # 环境配置（Pydantic Settings）
 │   ├── tests/
 │   ├── Dockerfile
@@ -85,6 +96,13 @@ doncaster-property-intel/
 - 召回阶段宽泛取候选（`top_k × HYBRID_CANDIDATE_MULTIPLIER`），重排后收窄到 `RERANKER_TOP_N`。
 - 重排后于召回、先于 Prompt 组装，在保留候选多样性的同时保证生成质量。
 - 本地 cross-encoder（`ms-marco-MiniLM-L-6-v2`）无需外部 API，CPU 即可运行；设置 `RERANKER_PROVIDER=cohere` 和 `COHERE_API_KEY` 可切换到 Cohere 免费版。
+
+### 为什么用 ReAct Agent 而非固定管线？
+
+- 房产研究横跨多个信息源：本地文档、当前挂牌、实时网络。
+- 单一固定管线无法可靠覆盖所有查询类型；Agent 按查询自主选择工具。
+- ReAct（推理 + 行动）强制 LLM 在调用工具前阐明理由——推理轨迹写入 `agent_calls.jsonl`，便于解释和调试。
+- `max_iterations=6` 防止无限循环；`handle_parsing_errors=True` 确保 LLM 生成格式错误时 API 仍能稳定响应。
 
 ---
 
@@ -180,6 +198,32 @@ curl "http://localhost:8000/query?question=3108%20%E5%AD%A6%E5%8C%BA%E6%98%AF%E4
 
 ---
 
+## Agent 端点
+
+`POST /agent` — 向 ReAct Agent 提问，Agent 自主选择工具并返回综合答案。
+
+**请求示例：**
+
+```bash
+curl -X POST http://localhost:8000/agent \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Doncaster East 的房价中位数是多少？有没有低于 120 万的挂牌？"}'
+```
+
+**响应示例：**
+
+```json
+{
+  "answer": "Doncaster East（3109）的房价中位数约为 ...",
+  "tools_used": ["rag_search", "domain_listings"],
+  "tool_latencies_ms": {"rag_search": 280, "domain_listings": 95},
+  "total_time_ms": 1840,
+  "fallback_triggered": false
+}
+```
+
+---
+
 ## Phase 1 完成标准
 
 - Weaviate 与后端通过 Docker Compose 成功启动
@@ -199,10 +243,20 @@ curl "http://localhost:8000/query?question=3108%20%E5%AD%A6%E5%8C%BA%E6%98%AF%E4
 
 ---
 
+## Phase 3 完成标准
+
+- `POST /agent` 根据问题自动路由到合适的工具，无需硬编码逻辑
+- 三个工具（rag_search、domain_listings、web_search）均可调用并返回有效字符串
+- `agent_calls.jsonl` 记录每次请求的 tools_selected、tool_latencies_ms、fallback_triggered
+- 无 DOMAIN_API_KEY 时 stub 模式正常工作；配置密钥后自动切换到真实 API
+- Phase 3 全部测试通过
+
+---
+
 ## 路线图
 
 | 阶段 | 目标 | 状态 |
 |------|------|------|
 | Phase 1 | 基础 RAG 管线（摄入 + 向量检索 + 问答） | ✅ 已完成 |
 | Phase 2 | 检索质量提升（hybrid 检索、重排、失败兜底） | ✅ 已完成 |
-| Phase 3 | Agentic 工作流（多工具 Agent、Domain API、结构化日志） | 待开发 |
+| Phase 3 | Agentic 工作流（多工具 Agent、Domain API、结构化日志） | ✅ 已完成 |

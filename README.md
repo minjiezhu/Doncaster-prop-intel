@@ -33,6 +33,15 @@ Extended coverage: Doncaster East (3109), Templestowe and Templestowe Lower (310
 - Retrieval failure handling: Weaviate unreachable, Ollama timeout, empty recall
 - Structured comparison log (retrieval_comparison.jsonl) for side-by-side mode analysis
 
+## Phase 3 Deliverables
+
+- LangChain ReAct agent that autonomously selects tools per query
+- **Tool 1 — `rag_search`**: local knowledge base (PDFs, CSVs, reports) via hybrid_rerank pipeline
+- **Tool 2 — `domain_listings`**: Domain.com.au property listings (stub mode without key; live with `DOMAIN_API_KEY`)
+- **Tool 3 — `web_search`**: DuckDuckGo fallback for recent news, council updates, planning permits
+- Structured agent call log (`agent_calls.jsonl`): tools selected, per-tool latency, fallback flag
+- New endpoint: `POST /agent` — accepts free-text question, returns answer + tool telemetry
+
 ## Project Structure
 
 doncaster-property-intel/
@@ -81,6 +90,15 @@ doncaster-property-intel/
 - Keeping reranker after recall avoids over-constraining the candidate pool too early.
 - Local cross-encoder (`ms-marco-MiniLM-L-6-v2`) runs on CPU with no external dependency; swap to
   Cohere by setting `RERANKER_PROVIDER=cohere` and `COHERE_API_KEY` in `.env`.
+
+### Why a ReAct agent over a fixed pipeline?
+
+- Property research spans multiple information sources: local documents, current listings, and real-time web.
+- A single pipeline cannot reliably serve all query types; an agent selects the right tool per query.
+- ReAct (Reason + Act) forces the LLM to articulate its tool choice before calling it — this trace is
+  visible in `agent_calls.jsonl` for explainability and debugging.
+- `max_iterations=6` caps runaway loops; `handle_parsing_errors=True` keeps the API stable even when
+  the LLM produces malformed tool-call JSON.
 
 ## Setup
 
@@ -175,6 +193,30 @@ Example response shape:
 - chunk_quality.jsonl contains both fixed and semantic comparison entries
 - GET /query returns an answer and source chunks
 
+## Agent Endpoint
+
+`POST /agent` — runs the ReAct agent over a free-text question.
+
+Example request:
+
+```bash
+curl -X POST http://localhost:8000/agent \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is the median price in Doncaster East and are there any listings under $1.2M?"}'
+```
+
+Example response:
+
+```json
+{
+  "answer": "The median price in Doncaster East (3109) is ...",
+  "tools_used": ["rag_search", "domain_listings"],
+  "tool_latencies_ms": {"rag_search": 280, "domain_listings": 95},
+  "total_time_ms": 1840,
+  "fallback_triggered": false
+}
+```
+
 ## Phase 2 Done Criteria
 
 - `?mode=hybrid` returns results with BM25 + vector fusion
@@ -183,10 +225,18 @@ Example response shape:
 - Weaviate unreachable and Ollama timeout both return graceful responses
 - All Phase 2 tests pass
 
+## Phase 3 Done Criteria
+
+- `POST /agent` routes questions to the appropriate tool without hard-coded routing logic
+- All three tools (rag_search, domain_listings, web_search) are callable and return valid string output
+- agent_calls.jsonl records tools_selected, tool_latencies_ms, fallback_triggered for every request
+- Domain stub mode works without a DOMAIN_API_KEY; live mode activates when key is set
+- All Phase 3 tests pass
+
 ## Roadmap
 
 | Phase | Goal | Status |
 |-------|------|--------|
 | 1 | Basic RAG pipeline (ingestion + vector search + Q&A) | Done |
 | 2 | Retrieval quality (hybrid search, reranking, failure handling) | Done |
-| 3 | Agentic workflow (multi-tool agent, Domain API, structured logging) | Pending |
+| 3 | Agentic workflow (multi-tool agent, Domain API, structured logging) | Done |

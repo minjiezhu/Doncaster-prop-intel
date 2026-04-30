@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     metrics_log_path: str = Field(default="backend/logs/chunk_quality.jsonl")
     retrieval_comparison_log_path: str = Field(default="backend/logs/retrieval_comparison.jsonl")
 
+    # Phase 3 agent settings
+    # Domain API endpoint (stub: returns mock listings; swap for real API in prod)
+    domain_api_url: str = Field(default="https://api.domain.com.au/v1")
+    domain_api_key: str = Field(default="")
+    # Max listings returned by the domain tool per query
+    domain_listings_limit: int = Field(default=5)
+    # DuckDuckGo web search: max results to return to the agent
+    web_search_max_results: int = Field(default=5)
+    # Agent tool-call log file path
+    agent_log_path: str = Field(default="backend/logs/agent_calls.jsonl")
+    # Timeout (seconds) applied to each agent tool invocation
+    agent_tool_timeout_seconds: float = Field(default=20.0)
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
