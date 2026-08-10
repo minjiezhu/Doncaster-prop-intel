@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     reranker_model: str = Field(default="cross-encoder/ms-marco-MiniLM-L-6-v2")
     reranker_top_n: int = Field(default=5)
     cohere_api_key: str = Field(default="")
+    # Minimum reranker score to keep a result; below this, treated as "no relevant results".
+    # None (default) disables filtering. Score scale differs by provider (local cross-encoder
+    # logits are unbounded, Cohere returns 0-1), so this needs calibrating against real data
+    # before enabling — leave unset until then.
+    reranker_min_score: float | None = Field(default=None)
 
     metrics_log_path: str = Field(default="backend/logs/chunk_quality.jsonl")
     retrieval_comparison_log_path: str = Field(default="backend/logs/retrieval_comparison.jsonl")

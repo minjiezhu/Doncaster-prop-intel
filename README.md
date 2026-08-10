@@ -90,6 +90,11 @@ doncaster-property-intel/
 - Keeping reranker after recall avoids over-constraining the candidate pool too early.
 - Local cross-encoder (`ms-marco-MiniLM-L-6-v2`) runs on CPU with no external dependency; swap to
   Cohere by setting `RERANKER_PROVIDER=cohere` and `COHERE_API_KEY` in `.env`.
+- Reranking only narrows/reorders candidates — it does not reject irrelevant ones by default.
+  Set `RERANKER_MIN_SCORE` in `.env` to drop candidates scoring below a threshold (treated the
+  same as an empty recall). Left unset by default: score scale differs by provider (local
+  cross-encoder logits are unbounded, Cohere returns 0-1), so a sane value has to be calibrated
+  against real ingested data, not guessed.
 
 ### Why a ReAct agent over a fixed pipeline?
 

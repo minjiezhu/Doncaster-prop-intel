@@ -101,31 +101,15 @@ class QueryService:
         recall_ms = int((perf_counter() - recall_start) * 1000)
 
         if not rows:
-            elapsed_ms = int((perf_counter() - start) * 1000)
-            log_retrieval_comparison(
-                self.settings.retrieval_comparison_log_path,
+            return self._no_results_response(
                 question=question,
                 mode=mode,
-                top_k=k,
+                k=k,
+                elapsed_start=start,
                 candidates_before_rerank=0,
-                final_hits=0,
-                top_scores=[],
-                retrieval_time_ms=elapsed_ms,
                 fallback_triggered=fallback_triggered,
                 fallback_reason=fallback_reason,
             )
-            return {
-                "answer": "未检索到相关资料，请先摄入文档或调整问题范围。",
-                "sources": [],
-                "retrieval_debug": {
-                    "mode": mode,
-                    "top_k": k,
-                    "retrieval_time_ms": elapsed_ms,
-                    "hits": 0,
-                    "fallback_triggered": fallback_triggered,
-                    "fallback_reason": fallback_reason,
-                },
-            }
 
         candidates_count = len(rows)
 
@@ -139,6 +123,23 @@ class QueryService:
                 top_n=self.settings.reranker_top_n,
             )
             rerank_ms = int((perf_counter() - rerank_start) * 1000)
+
+            min_score = self.settings.reranker_min_score
+            if min_score is not None:
+                ranked = [r for r in ranked if r.score >= min_score]
+                if not ranked:
+                    return self._no_results_response(
+                        question=question,
+                        mode=mode,
+                        k=k,
+                        elapsed_start=start,
+                        candidates_before_rerank=candidates_count,
+                        fallback_triggered=False,
+                        fallback_reason=(
+                            f"All reranked candidates scored below reranker_min_score={min_score}"
+                        ),
+                    )
+
             # Rebuild rows from ranked output so downstream code stays uniform
             rows = [
                 {
@@ -253,6 +254,42 @@ class QueryService:
                 entry["distance"] = float(additional.get("distance", 0.0))
             sources.append(entry)
         return sources
+
+    def _no_results_response(
+        self,
+        question: str,
+        mode: str,
+        k: int,
+        elapsed_start: float,
+        candidates_before_rerank: int,
+        fallback_triggered: bool,
+        fallback_reason: str,
+    ) -> dict:
+        elapsed_ms = int((perf_counter() - elapsed_start) * 1000)
+        log_retrieval_comparison(
+            self.settings.retrieval_comparison_log_path,
+            question=question,
+            mode=mode,
+            top_k=k,
+            candidates_before_rerank=candidates_before_rerank,
+            final_hits=0,
+            top_scores=[],
+            retrieval_time_ms=elapsed_ms,
+            fallback_triggered=fallback_triggered,
+            fallback_reason=fallback_reason,
+        )
+        return {
+            "answer": "未检索到相关资料，请先摄入文档或调整问题范围。",
+            "sources": [],
+            "retrieval_debug": {
+                "mode": mode,
+                "top_k": k,
+                "retrieval_time_ms": elapsed_ms,
+                "hits": 0,
+                "fallback_triggered": fallback_triggered,
+                "fallback_reason": fallback_reason,
+            },
+        }
 
     def _fallback_response(
         self,
