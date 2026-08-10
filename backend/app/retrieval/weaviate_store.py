@@ -69,7 +69,9 @@ class WeaviateStore:
     # Retrieval helpers
     # ------------------------------------------------------------------
 
-    _RETURN_FIELDS = "{ text source suburb doc_type strategy chunk_index _additional { distance id } }"
+    # `distance` is only populated for nearVector (vector_search); Weaviate's hybrid queries
+    # return null for it and use `score` instead (returned as a string, not a number).
+    _RETURN_FIELDS = "{ text source suburb doc_type strategy chunk_index _additional { distance score id } }"
 
     def vector_search(self, vector: list[float], top_k: int = 5) -> list[dict]:
         """Pure vector (cosine) recall — Phase 1 baseline."""

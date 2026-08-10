@@ -151,9 +151,12 @@ class QueryService:
             ]
             top_scores = [r.score for r in ranked]
         else:
-            top_scores = [
-                float(r.get("_additional", {}).get("distance", 0.0)) for r in rows
-            ]
+            if mode == "hybrid":
+                # _recall() over-fetches candidate_k (k * multiplier) so the reranker would
+                # have a richer pool in hybrid_rerank mode; plain hybrid mode never used that
+                # multiplier, so it must truncate back down to what was actually requested.
+                rows = rows[:k]
+            top_scores = [self._extract_score(r, mode) for r in rows]
 
         # --- Step 4: assemble context and generate answer ---
         context_chunks = [row.get("text", "") for row in rows]
@@ -236,6 +239,14 @@ class QueryService:
         except Exception as exc:
             return [], True, f"Retrieval error: {type(exc).__name__}"
 
+    def _extract_score(self, row: dict, mode: str) -> float:
+        """Weaviate only populates `distance` for nearVector (vector mode); hybrid queries
+        return null for `distance` and use `score` instead (returned as a string)."""
+        additional = row.get("_additional", {})
+        if mode == "vector":
+            return float(additional.get("distance") or 0.0)
+        return float(additional.get("score") or 0.0)
+
     def _build_sources(self, rows: list[dict], mode: str) -> list[dict]:
         sources = []
         for row in rows:
@@ -250,8 +261,10 @@ class QueryService:
             }
             if mode == "hybrid_rerank":
                 entry["rerank_score"] = float(row.get("_rerank_score", 0.0))
+            elif mode == "hybrid":
+                entry["score"] = self._extract_score(row, mode)
             else:
-                entry["distance"] = float(additional.get("distance", 0.0))
+                entry["distance"] = self._extract_score(row, mode)
             sources.append(entry)
         return sources
 

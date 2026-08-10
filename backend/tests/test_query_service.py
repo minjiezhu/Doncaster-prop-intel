@@ -24,6 +24,51 @@ def _make_service(reranker_min_score: float | None) -> QueryService:
     return service
 
 
+class TestHybridModeScoring:
+    def test_truncates_overfetched_candidates_to_top_k(self) -> None:
+        # _recall() over-fetches candidate_k = top_k * multiplier for hybrid mode so the
+        # reranker has a richer pool in hybrid_rerank mode; plain "hybrid" mode must still
+        # truncate back down to what was actually requested.
+        service = _make_service(reranker_min_score=None)
+        service.store.hybrid_search.return_value = [
+            {
+                "text": f"chunk {i}",
+                "source": f"{i}.pdf",
+                "suburb": "doncaster",
+                "strategy": "fixed",
+                "chunk_index": i,
+                "_additional": {"distance": None, "score": "0.9", "id": str(i)},
+            }
+            for i in range(15)
+        ]
+
+        result = service.answer_question("median income?", top_k=5, mode="hybrid")
+
+        assert len(result["sources"]) == 5
+
+    def test_extracts_score_not_distance_for_hybrid_mode(self) -> None:
+        # Weaviate's hybrid endpoint returns null for `distance` (only meaningful for
+        # nearVector) and a string-typed `score` instead; naively doing
+        # float(additional.get("distance", 0.0)) crashes with TypeError since the key is
+        # present with value None, so .get()'s default never kicks in.
+        service = _make_service(reranker_min_score=None)
+        service.store.hybrid_search.return_value = [
+            {
+                "text": "chunk A",
+                "source": "a.pdf",
+                "suburb": "doncaster",
+                "strategy": "fixed",
+                "chunk_index": 0,
+                "_additional": {"distance": None, "score": "0.87", "id": "1"},
+            },
+        ]
+
+        result = service.answer_question("median income?", top_k=5, mode="hybrid")
+
+        assert result["sources"][0]["score"] == 0.87
+        assert "distance" not in result["sources"][0]
+
+
 class TestRerankerMinScore:
     def test_disabled_by_default_keeps_all_reranked_results(self) -> None:
         service = _make_service(reranker_min_score=None)
