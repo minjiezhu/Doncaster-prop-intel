@@ -250,6 +250,28 @@ Example response:
 - Domain stub mode works without a DOMAIN_API_KEY; live mode activates when key is set
 - All Phase 3 tests pass
 
+## Retrieval Evaluation CLI
+
+`backend/app/eval/cli.py` measures retrieval quality against a golden question set instead of
+eyeballing individual answers. Each golden question maps to the source file(s) it should
+retrieve (matched by filename, not chunk text, so it survives re-ingestion and chunking-strategy
+changes); the CLI calls `WeaviateStore` directly and skips LLM answer generation entirely — this
+is a retrieval-quality measurement, not an answer-quality one, so there's no reason to pay for a
+qwen3:14b call per question.
+
+```bash
+python -m backend.app.eval.cli
+python -m backend.app.eval.cli --golden-set backend/eval/golden_set.yaml --top-k 5
+python -m backend.app.eval.cli --modes hybrid hybrid_rerank --report backend/logs/eval_report.json
+```
+
+Reports recall@k (did an expected source appear anywhere in the top-k?) and MRR (how high did
+it rank) per mode, so you can see whether tuning `HYBRID_ALPHA` or `RERANKER_MIN_SCORE` actually
+helps instead of guessing. With only a handful of documents in the corpus, don't expect
+meaningful separation between modes — recall@k saturates to 1.0 for all three almost
+immediately; the tool becomes useful once the corpus is large/noisy enough that retrieval can
+actually fail.
+
 ## Roadmap
 
 | Phase | Goal | Status |
@@ -257,3 +279,4 @@ Example response:
 | 1 | Basic RAG pipeline (ingestion + vector search + Q&A) | Done |
 | 2 | Retrieval quality (hybrid search, reranking, failure handling) | Done |
 | 3 | Agentic workflow (multi-tool agent, Domain API, structured logging) | Done |
+| 4 | Retrieval evaluation (golden-set recall@k / MRR CLI) | Done |

@@ -1,0 +1,42 @@
+# Golden retrieval-quality question set.
+#
+# Each entry maps a natural-language question to the source file(s) that should appear
+# in the retrieved results. Matching is by `source` (filename), not exact chunk text, so
+# it stays valid across chunking-strategy changes and re-ingestion.
+#
+# Grounded in the three real documents ingested from data/doncaster/ on 2026-08-10:
+#   - planning-application-PLA22-0031-doncaster-east.pdf (Manningham Council planning report)
+#   - manningham-suburb-census-2021.csv (ABS 2021 Census, 4 Manningham postcodes)
+#   - vic-school-zones-policy.txt (Victorian DoE school zone policy)
+
+- question: How many dwellings were proposed in the planning application for 1026-1030 Doncaster Road?
+  expected_sources:
+    - planning-application-PLA22-0031-doncaster-east.pdf
+
+- question: What is the file number for planning application PLA22/0031?
+  expected_sources:
+    - planning-application-PLA22-0031-doncaster-east.pdf
+
+- question: Who is the applicant for the planning permit amendment at 1026-1030 Doncaster Road?
+  expected_sources:
+    - planning-application-PLA22-0031-doncaster-east.pdf
+
+- question: What is the median weekly household income in Doncaster East?
+  expected_sources:
+    - manningham-suburb-census-2021.csv
+
+- question: What is the population of Templestowe and Templestowe Lower?
+  expected_sources:
+    - manningham-suburb-census-2021.csv
+
+- question: What is the median weekly rent in Bulleen?
+  expected_sources:
+    - manningham-suburb-census-2021.csv
+
+- question: How is a student's local school determined in metropolitan Melbourne?
+  expected_sources:
+    - vic-school-zones-policy.txt
+
+- question: Are students guaranteed a place at their designated neighbourhood school?
+  expected_sources:
+    - vic-school-zones-policy.txt
