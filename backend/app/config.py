@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     metrics_log_path: str = Field(default="backend/logs/chunk_quality.jsonl")
     retrieval_comparison_log_path: str = Field(default="backend/logs/retrieval_comparison.jsonl")
+    ingestion_manifest_path: str = Field(default="backend/logs/ingestion_manifest.jsonl")
 
     # Phase 3 agent settings
     # Domain API endpoint (stub: returns mock listings; swap for real API in prod)

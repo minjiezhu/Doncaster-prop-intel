@@ -69,6 +69,65 @@ class TestDomainTool:
         result = tool.func("Templestowe")
         assert "Templestowe" in result
 
+    def test_live_mode_parses_nested_listing_shape(self):
+        settings = Settings(
+            domain_api_key="live-key",
+            domain_api_url="https://api.domain.com.au/v1",
+            domain_listings_limit=2,
+            agent_tool_timeout_seconds=5.0,
+        )
+        tool = _make_domain_tool(settings)
+
+        response_payload = {
+            "listings": [
+                {
+                    "listing": {
+                        "propertyDetails": {"displayableAddress": "12 Sample St Doncaster"},
+                        "priceDetails": {"displayPrice": "$1,200,000"},
+                    }
+                }
+            ]
+        }
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_payload
+        mock_response.raise_for_status.return_value = None
+
+        with patch("httpx.get", return_value=mock_response) as mock_get:
+            result = tool.func("Doncaster")
+
+        mock_get.assert_called_once()
+        assert "12 Sample St Doncaster" in result
+        assert "$1,200,000" in result
+
+    def test_live_mode_parses_flat_listing_shape(self):
+        settings = Settings(
+            domain_api_key="live-key",
+            domain_api_url="https://api.domain.com.au/v1",
+            domain_listings_limit=2,
+            agent_tool_timeout_seconds=5.0,
+        )
+        tool = _make_domain_tool(settings)
+
+        response_payload = {
+            "listings": [
+                {
+                    "propertyDetails": {"address": {"display": "8 Test Ave Templestowe"}},
+                    "price": {"display": "$1,450,000"},
+                }
+            ]
+        }
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = response_payload
+        mock_response.raise_for_status.return_value = None
+
+        with patch("httpx.get", return_value=mock_response):
+            result = tool.func("Templestowe")
+
+        assert "8 Test Ave Templestowe" in result
+        assert "$1,450,000" in result
+
 
 class TestWebSearchTool:
     def test_ddg_not_installed_returns_graceful_message(self, settings):

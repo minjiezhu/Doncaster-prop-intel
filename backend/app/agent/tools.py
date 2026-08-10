@@ -61,6 +61,54 @@ def _make_domain_tool(settings: "Settings") -> Tool:
 
     import httpx
 
+    def _pick_listing_node(item: dict) -> dict:
+        if isinstance(item.get("listing"), dict):
+            return item["listing"]
+        return item
+
+    def _extract_address(listing: dict) -> str:
+        details = listing.get("propertyDetails", {}) if isinstance(listing, dict) else {}
+        address = (
+            details.get("displayableAddress")
+            or details.get("displayAddress")
+            or details.get("address")
+        )
+        if isinstance(address, dict):
+            return address.get("display") or address.get("street") or "?"
+        return address or "?"
+
+    def _extract_price(listing: dict) -> str:
+        candidates = []
+        if isinstance(listing, dict):
+            candidates.extend(
+                [
+                    listing.get("priceDetails"),
+                    listing.get("price"),
+                    listing.get("listingPrice"),
+                ]
+            )
+
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            value = (
+                candidate.get("displayPrice")
+                or candidate.get("price")
+                or candidate.get("display")
+                or candidate.get("value")
+            )
+            if value:
+                return str(value)
+
+        return "Price unavailable"
+
+    def _format_listings(items: list[dict]) -> str:
+        lines = []
+        for item in items[: settings.domain_listings_limit]:
+            listing = _pick_listing_node(item)
+            lines.append(f"• {_extract_address(listing)} — {_extract_price(listing)}")
+        return "\n".join(lines)
+
     def domain_listings(query: str) -> str:
         """
         Production implementation would call:
@@ -81,27 +129,43 @@ def _make_domain_tool(settings: "Settings") -> Tool:
                 "(Set DOMAIN_API_KEY in .env for live results)"
             )
 
-        # Live path — hit real Domain API
+        # Live path — Domain API v1 residential search uses POST with a JSON body.
+        # Response is a JSON array; each element has a "listing" key with property details.
+        body = {
+            "listingType": "Sale",
+            "locations": [
+                {
+                    "state": "VIC",
+                    "suburb": query,
+                    "includeSurroundingSuburbs": False,
+                }
+            ],
+            "pageSize": settings.domain_listings_limit,
+        }
         try:
-            resp = httpx.get(
+            resp = httpx.post(
                 f"{settings.domain_api_url}/listings/residential/_search",
-                headers={"X-Api-Key": settings.domain_api_key},
-                params={"suburb": query, "pageSize": settings.domain_listings_limit},
+                headers={
+                    "X-Api-Key": settings.domain_api_key,
+                    "Content-Type": "application/json",
+                },
+                json=body,
                 timeout=settings.agent_tool_timeout_seconds,
             )
             resp.raise_for_status()
             data = resp.json()
-            listings = data.get("listings", [])[:settings.domain_listings_limit]
+            # Response may be a list directly or a dict with a "listings" key
+            if isinstance(data, list):
+                listings = data[: settings.domain_listings_limit]
+            else:
+                listings = data.get("listings", [])[: settings.domain_listings_limit]
             if not listings:
                 return "[Domain API] No listings found for: " + query
-            lines = []
-            for item in listings:
-                addr = item.get("listing", {}).get("propertyDetails", {}).get("displayableAddress", "?")
-                price = item.get("listing", {}).get("priceDetails", {}).get("displayPrice", "?")
-                lines.append(f"• {addr} — {price}")
-            return "[Domain API]\n" + "\n".join(lines)
+            return "[Domain API]\n" + _format_listings(listings)
+        except (TypeError, ValueError, KeyError) as exc:
+            return f"[Domain API] Error parsing response: {exc}"
         except httpx.HTTPError as exc:
-            return f"[Domain API] Error: {exc}"
+            return f"[Domain API] HTTP error: {exc}"
 
     return Tool(
         name="domain_listings",

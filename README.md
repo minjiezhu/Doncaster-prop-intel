@@ -139,7 +139,14 @@ Ingest an entire folder:
 python -m backend.app.ingestion.cli --path data/ --strategy fixed
 ```
 
+Write an ingestion manifest while processing files:
+
+```bash
+python -m backend.app.ingestion.cli --path data/doncaster --strategy both --suburb Doncaster --manifest backend/logs/ingestion_manifest.jsonl
+```
+
 Quality logs are written to the path in METRICS_LOG_PATH (default backend/logs/chunk_quality.jsonl).
+Ingestion manifests default to `INGESTION_MANIFEST_PATH` (default `backend/logs/ingestion_manifest.jsonl`).
 
 ## Query Endpoint
 
