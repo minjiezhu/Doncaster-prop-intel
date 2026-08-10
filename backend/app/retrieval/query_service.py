@@ -300,7 +300,7 @@ class QueryService:
     ) -> dict:
         elapsed_ms = int((perf_counter() - elapsed_start) * 1000)
         return {
-            "answer": f"検索に失敗しました。原因: {reason}",
+            "answer": f"检索失败，原因：{reason}",
             "sources": [],
             "retrieval_debug": {
                 "mode": mode,
