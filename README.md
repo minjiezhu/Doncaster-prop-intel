@@ -102,6 +102,8 @@ doncaster-property-intel/
 
 ## Setup
 
+> Running the backend outside Docker (tests, the ingestion CLI, etc.) requires **Python 3.11–3.12** — the pinned `numpy`/`langchain` versions have no wheels for 3.13+. The Docker image itself is unaffected (pinned to `python:3.11-slim`).
+
 1. Copy environment file.
 
 ```bash
