@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 from backend.app.retrieval.reranker import LocalCrossEncoderReranker, RankedChunk
@@ -14,7 +15,8 @@ def test_local_reranker_returns_top_n() -> None:
     fake_scores = [0.9, 0.1, 0.7, 0.4]
 
     mock_model = MagicMock()
-    mock_model.predict.return_value = fake_scores
+    # CrossEncoder.predict() returns a numpy array in real usage; rerank() calls .tolist() on it.
+    mock_model.predict.return_value = np.array(fake_scores)
     reranker._model = mock_model  # inject without loading real weights
 
     chunks = _make_chunks(4)
@@ -36,7 +38,7 @@ def test_local_reranker_top_n_larger_than_input() -> None:
     reranker = LocalCrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
     fake_scores = [0.5, 0.3]
     mock_model = MagicMock()
-    mock_model.predict.return_value = fake_scores
+    mock_model.predict.return_value = np.array(fake_scores)
     reranker._model = mock_model
 
     ranked = reranker.rerank(query="school zones", chunks=_make_chunks(2), top_n=10)

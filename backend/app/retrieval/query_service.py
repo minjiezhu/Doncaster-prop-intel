@@ -21,7 +21,7 @@ import httpx
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 
-from backend.app.config import get_settings
+from backend.app.config import Settings, get_settings
 from backend.app.retrieval.comparison_log import log_retrieval_comparison
 from backend.app.retrieval.reranker import RankedChunk, build_reranker
 from backend.app.retrieval.weaviate_store import WeaviateStore
@@ -30,8 +30,8 @@ _SEARCH_MODES = {"vector", "hybrid", "hybrid_rerank"}
 
 
 class QueryService:
-    def __init__(self) -> None:
-        self.settings = get_settings()
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or get_settings()
         self.store = WeaviateStore()
         self.embeddings = OllamaEmbeddings(
             model=self.settings.ollama_embed_model,

@@ -93,10 +93,10 @@ class TestDomainTool:
         mock_response.json.return_value = response_payload
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response) as mock_get:
+        with patch("httpx.post", return_value=mock_response) as mock_post:
             result = tool.func("Doncaster")
 
-        mock_get.assert_called_once()
+        mock_post.assert_called_once()
         assert "12 Sample St Doncaster" in result
         assert "$1,200,000" in result
 
@@ -122,7 +122,7 @@ class TestDomainTool:
         mock_response.json.return_value = response_payload
         mock_response.raise_for_status.return_value = None
 
-        with patch("httpx.get", return_value=mock_response):
+        with patch("httpx.post", return_value=mock_response):
             result = tool.func("Templestowe")
 
         assert "8 Test Ave Templestowe" in result
