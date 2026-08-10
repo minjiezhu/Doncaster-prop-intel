@@ -37,7 +37,10 @@ Extended coverage: Doncaster East (3109), Templestowe and Templestowe Lower (310
 
 - LangChain ReAct agent that autonomously selects tools per query
 - **Tool 1 — `rag_search`**: local knowledge base (PDFs, CSVs, reports) via hybrid_rerank pipeline
-- **Tool 2 — `domain_listings`**: Domain.com.au property listings (stub mode without key; live with `DOMAIN_API_KEY`)
+- **Tool 2 — `domain_listings`**: Domain.com.au property listings (stub mode without key; live with `DOMAIN_API_KEY`).
+  Live mode requires a Domain Developer Portal API key, which requires completing a business
+  profile — in practice this gates live mode behind being a registered real estate business, so
+  stub mode is expected to be the permanent state for non-commercial use of this project.
 - **Tool 3 — `web_search`**: DuckDuckGo fallback for recent news, council updates, planning permits
 - Structured agent call log (`agent_calls.jsonl`): tools selected, per-tool latency, fallback flag
 - New endpoint: `POST /agent` — accepts free-text question, returns answer + tool telemetry
