@@ -187,9 +187,9 @@ def _make_web_search_tool(settings: "Settings") -> Tool:
 
     def web_search(query: str) -> str:
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
         except ImportError:
-            return "[Web Search] duckduckgo-search package not installed."
+            return "[Web Search] ddgs package not installed."
 
         results = []
         try:
@@ -210,7 +210,7 @@ def _make_web_search_tool(settings: "Settings") -> Tool:
         name="web_search",
         func=web_search,
         description=(
-            "Search the web (DuckDuckGo) for recent news, council announcements, "
+            "Search the web for recent news, council announcements, "
             "planning permits, or any question not answered by local documents or "
             "Domain listings. Use as a fallback when the other tools return insufficient results."
         ),

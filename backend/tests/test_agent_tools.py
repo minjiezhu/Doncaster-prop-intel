@@ -132,7 +132,7 @@ class TestDomainTool:
 class TestWebSearchTool:
     def test_ddg_not_installed_returns_graceful_message(self, settings):
         tool = _make_web_search_tool(settings)
-        with patch.dict("sys.modules", {"duckduckgo_search": None}):
+        with patch.dict("sys.modules", {"ddgs": None}):
             # simulate ImportError by patching the import inside the func
             with patch("builtins.__import__", side_effect=ImportError("no module")):
                 result = tool.func("council rezoning Doncaster")
@@ -151,8 +151,8 @@ class TestWebSearchTool:
             def text(self, *a, **kw): return mock_results
 
         with patch("backend.app.agent.tools.DDGS", MockDDGS, create=True):
-            with patch("duckduckgo_search.DDGS", MockDDGS, create=True):
-                with patch.dict("sys.modules", {"duckduckgo_search": MagicMock(DDGS=MockDDGS)}):
+            with patch("ddgs.DDGS", MockDDGS, create=True):
+                with patch.dict("sys.modules", {"ddgs": MagicMock(DDGS=MockDDGS)}):
                     result = tool.func("rezoning Doncaster")
 
         assert isinstance(result, str)
